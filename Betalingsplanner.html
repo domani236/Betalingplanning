@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#111111">
+<title>Mijn Betalingsplanner</title>
+<style>
+:root{
+  --bg:#f4f5f7; --card:#fff; --text:#111; --muted:#777; --line:#e7e7e7; --accent:#111;
+  --priv:#6b8afd; --biz:#5aa66a; --debt:#d06a6a;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+.app{max-width:720px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 90px)}
+.header{display:flex;align-items:center;justify-content:space-between;margin:4px 4px 12px}
+.header h1{font-size:24px;margin:0}
+.small{font-size:12px;color:var(--muted)}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.tab{border:none;background:#e9eaee;border-radius:14px;padding:12px 6px;font-weight:700;font-size:14px}
+.tab.active{background:#111;color:#fff}
+.card{background:var(--card);border-radius:18px;padding:16px;box-shadow:0 1px 8px rgba(0,0,0,.04);margin-bottom:12px}
+.summary{display:flex;align-items:end;justify-content:space-between}
+.summary .amount{font-size:32px;font-weight:800;letter-spacing:-1px}
+.month-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.month-nav button{border:0;background:#eee;border-radius:10px;width:40px;height:38px;font-size:20px}
+.month-label{font-weight:800;text-transform:capitalize}
+.weekdays,.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.weekdays div{text-align:center;font-size:11px;color:#999;padding:4px 0}
+.day{min-height:62px;border:1px solid var(--line);border-radius:10px;padding:6px;position:relative;background:#fff}
+.day.empty{background:transparent;border-color:transparent}
+.daynum{font-size:11px;color:#777}
+.dot{height:7px;width:7px;border-radius:50%;display:inline-block;margin-right:3px}
+.daytotal{font-size:10px;font-weight:700;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.today{outline:2px solid #111}
+.section-title{font-size:16px;font-weight:800;margin:0 0 10px}
+.item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line);gap:12px}
+.item:last-child{border-bottom:0}
+.item-main{min-width:0}
+.item-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.item-right{text-align:right}
+.item-amount{font-weight:800}
+.item-actions button{border:0;background:none;color:#b54747;font-size:12px;padding:4px 0}
+.fab{position:fixed;right:max(18px,calc((100vw - 720px)/2 + 18px));bottom:calc(env(safe-area-inset-bottom) + 20px);width:58px;height:58px;border-radius:50%;border:0;background:#111;color:#fff;font-size:34px;line-height:1;box-shadow:0 8px 22px rgba(0,0,0,.25)}
+.tools{display:flex;gap:8px}
+.tools button,.secondary{border:0;background:#eee;border-radius:10px;padding:9px 11px;font-weight:700;font-size:12px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.38);display:none;align-items:flex-end;z-index:10}
+.modal.show{display:flex}
+.sheet{width:100%;max-width:720px;margin:0 auto;background:white;border-radius:22px 22px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px);max-height:90vh;overflow:auto}
+.sheet h2{margin:0 0 14px}
+label{display:block;font-size:12px;font-weight:700;color:#555;margin:12px 0 6px}
+input,select{width:100%;border:1px solid #ddd;border-radius:12px;padding:13px;font-size:16px;background:#fff}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.primary{width:100%;border:0;background:#111;color:#fff;border-radius:14px;padding:14px;font-weight:800;font-size:16px;margin-top:16px}
+.close{width:100%;border:0;background:#eee;border-radius:14px;padding:12px;font-weight:700;margin-top:8px}
+.badge{display:inline-block;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:700;color:white}
+.empty-state{color:#888;font-size:14px;padding:10px 0}
+.notice{font-size:11px;color:#777;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <h1>Betalingsplanner</h1>
+      <div class="small">Privé • Zakelijk • Schulden</div>
+    </div>
+    <div class="tools">
+      <button onclick="exportData()">Backup</button>
+      <button onclick="document.getElementById('importFile').click()">Import</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none" onchange="importData(event)">
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-cat="Prive" onclick="setCat('Prive')">Privé</button>
+    <button class="tab" data-cat="Zakelijk" onclick="setCat('Zakelijk')">Zakelijk</button>
+    <button class="tab" data-cat="Schulden" onclick="setCat('Schulden')">Schulden</button>
+  </div>
+
+  <div class="card summary">
+    <div>
+      <div class="small">Totaal deze maand</div>
+      <div class="amount" id="monthTotal">€ 0,00</div>
+    </div>
+    <div class="small" id="paymentCount">0 betalingen</div>
+  </div>
+
+  <div class="card">
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">‹</button>
+      <div class="month-label" id="monthLabel"></div>
+      <button onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="weekdays">
+      <div>Ma</div><div>Di</div><div>Wo</div><div>Do</div><div>Vr</div><div>Za</div><div>Zo</div>
+    </div>
+    <div class="calendar" id="calendar"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Betalingen deze maand</div>
+    <div id="list"></div>
+  </div>
+
+  <div class="card">
+    <div class="notice">Alles blijft op dit toestel in je browser opgeslagen. Gebruik af en toe <b>Backup</b> om een kopie van je gegevens te bewaren.</div>
+  </div>
+
+  <button class="fab" onclick="openModal()">+</button>
+</div>
+
+<div class="modal" id="modal" onclick="if(event.target===this) closeModal()">
+  <div class="sheet">
+    <h2>Betaling toevoegen</h2>
+    <label>Onderdeel</label>
+    <select id="cat">
+      <option value="Prive">Privé</option>
+      <option value="Zakelijk">Zakelijk</option>
+      <option value="Schulden">Schulden</option>
+    </select>
+
+    <label>Naam</label>
+    <input id="name" placeholder="Bijv. autoverzekering, huur, CZ">
+
+    <div class="row">
+      <div>
+        <label>Bedrag</label>
+        <input id="amount" type="number" inputmode="decimal" step="0.01" placeholder="0,00">
+      </div>
+      <div>
+        <label>Eerste betaaldatum</label>
+        <input id="date" type="date">
+      </div>
+    </div>
+
+    <label>Soort betaling</label>
+    <select id="repeat" onchange="toggleMonths()">
+      <option value="once">Eenmalig</option>
+      <option value="monthly">Elke maand</option>
+    </select>
+
+    <div id="monthsWrap" style="display:none">
+      <label>Hoeveel maanden? <span class="small">(leeg = onbeperkt)</span></label>
+      <input id="months" type="number" inputmode="numeric" min="1" placeholder="Bijv. 8">
+    </div>
+
+    <label>Notitie (optioneel)</label>
+    <input id="note" placeholder="Bijv. regeling loopt t/m april">
+
+    <button class="primary" onclick="savePayment()">Opslaan</button>
+    <button class="close" onclick="closeModal()">Annuleren</button>
+  </div>
+</div>
+
+<script>
+const COLORS={Prive:'#6b8afd',Zakelijk:'#5aa66a',Schulden:'#d06a6a'};
+let activeCat='Prive';
+let viewDate=new Date();
+viewDate=new Date(viewDate.getFullYear(),viewDate.getMonth(),1);
+let payments=JSON.parse(localStorage.getItem('betalingsplanner_v1')||'[]');
+
+function euro(n){return new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR'}).format(n)}
+function ym(d){return d.getFullYear()*12+d.getMonth()}
+function parseDate(s){const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
+function occurrencesForMonth(p, year, month){
+  const start=parseDate(p.date);
+  const targetIndex=year*12+month;
+  const startIndex=ym(start);
+  if(p.repeat==='once'){
+    return (start.getFullYear()===year && start.getMonth()===month) ? [start] : [];
+  }
+  const diff=targetIndex-startIndex;
+  if(diff<0) return [];
+  if(p.months && diff>=Number(p.months)) return [];
+  const day=Math.min(start.getDate(), new Date(year,month+1,0).getDate());
+  return [new Date(year,month,day)];
+}
+function currentMonthItems(){
+  const y=viewDate.getFullYear(), m=viewDate.getMonth();
+  let out=[];
+  payments.filter(p=>p.cat===activeCat).forEach(p=>{
+    occurrencesForMonth(p,y,m).forEach(d=>out.push({...p,occurrence:d}));
+  });
+  return out.sort((a,b)=>a.occurrence-b.occurrence);
+}
+function render(){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.cat===activeCat));
+  const y=viewDate.getFullYear(), m=viewDate.getMonth();
+  document.getElementById('monthLabel').textContent=viewDate.toLocaleDateString('nl-NL',{month:'long',year:'numeric'});
+  const items=currentMonthItems();
+  const total=items.reduce((s,p)=>s+Number(p.amount),0);
+  document.getElementById('monthTotal').textContent=euro(total);
+  document.getElementById('paymentCount').textContent=`${items.length} betaling${items.length===1?'':'en'}`;
+
+  const cal=document.getElementById('calendar'); cal.innerHTML='';
+  let firstDay=new Date(y,m,1).getDay(); firstDay=(firstDay+6)%7;
+  for(let i=0;i<firstDay;i++){const e=document.createElement('div');e.className='day empty';cal.appendChild(e)}
+  const days=new Date(y,m+1,0).getDate();
+  const today=new Date();
+  for(let d=1;d<=days;d++){
+    const cell=document.createElement('div'); cell.className='day';
+    if(today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===d)cell.classList.add('today');
+    const di=items.filter(x=>x.occurrence.getDate()===d);
+    const dayTotal=di.reduce((s,p)=>s+Number(p.amount),0);
+    cell.innerHTML=`<div class="daynum">${d}</div>`+
+      (di.length?`<div style="margin-top:4px">${di.slice(0,3).map(()=>`<span class="dot" style="background:${COLORS[activeCat]}"></span>`).join('')}</div><div class="daytotal">${euro(dayTotal)}</div>`:'');
+    cal.appendChild(cell);
+  }
+
+  const list=document.getElementById('list'); list.innerHTML='';
+  if(!items.length){list.innerHTML='<div class="empty-state">Geen betalingen in deze maand.</div>';return}
+  items.forEach(p=>{
+    const div=document.createElement('div'); div.className='item';
+    const repeatText=p.repeat==='monthly' ? (p.months?`maandelijks • ${p.months} maanden`:'maandelijks') : 'eenmalig';
+    div.innerHTML=`
+      <div class="item-main">
+        <div class="item-name">${escapeHtml(p.name)}</div>
+        <div class="item-meta">${p.occurrence.toLocaleDateString('nl-NL',{day:'numeric',month:'long'})} • ${repeatText}${p.note?` • ${escapeHtml(p.note)}`:''}</div>
+      </div>
+      <div class="item-right">
+        <div class="item-amount">${euro(Number(p.amount))}</div>
+        <div class="item-actions"><button onclick="deletePayment('${p.id}')">Verwijder</button></div>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+function setCat(c){activeCat=c;render()}
+function changeMonth(n){viewDate=new Date(viewDate.getFullYear(),viewDate.getMonth()+n,1);render()}
+function openModal(){
+  document.getElementById('cat').value=activeCat;
+  const d=new Date(); document.getElementById('date').value=d.toISOString().slice(0,10);
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function toggleMonths(){document.getElementById('monthsWrap').style.display=document.getElementById('repeat').value==='monthly'?'block':'none'}
+function savePayment(){
+  const cat=document.getElementById('cat').value;
+  const name=document.getElementById('name').value.trim();
+  const amount=parseFloat(document.getElementById('amount').value.replace(',','.'));
+  const date=document.getElementById('date').value;
+  const repeat=document.getElementById('repeat').value;
+  const months=document.getElementById('months').value;
+  const note=document.getElementById('note').value.trim();
+  if(!name||!amount||!date){alert('Vul naam, bedrag en datum in.');return}
+  payments.push({id:Date.now().toString()+Math.random().toString(16).slice(2),cat,name,amount,date,repeat,months:months?Number(months):null,note});
+  localStorage.setItem('betalingsplanner_v1',JSON.stringify(payments));
+  document.getElementById('name').value=''; document.getElementById('amount').value=''; document.getElementById('months').value=''; document.getElementById('note').value='';
+  closeModal(); activeCat=cat; render();
+}
+function deletePayment(id){
+  if(!confirm('Deze betaling verwijderen?'))return;
+  payments=payments.filter(p=>p.id!==id);
+  localStorage.setItem('betalingsplanner_v1',JSON.stringify(payments));render();
+}
+function exportData(){
+  const blob=new Blob([JSON.stringify(payments,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='betalingsplanner-backup.json';a.click();URL.revokeObjectURL(a.href);
+}
+function importData(ev){
+  const f=ev.target.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d))throw 0;payments=d;localStorage.setItem('betalingsplanner_v1',JSON.stringify(payments));render();alert('Backup geïmporteerd.')}catch(e){alert('Dit bestand is geen geldige backup.')}};
+  r.readAsText(f); ev.target.value='';
+}
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+render();
+</script>
+</body>
+</html>
